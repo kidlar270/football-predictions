@@ -1,1 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MatchAnalyst Pro | Firebase Real-time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #020617;
+            color: #f8fafc;
+        }
 
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+
+        .pulse-emerald {
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .loader {
+            border: 3px solid #1e293b;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div id="loading-overlay" class="fixed inset-0 bg-slate-950 z-50 flex flex-col items-center justify-center gap-4 transition-opacity duration-500">
+        <div class="loader"></div>
+        <p class="text-slate-400 font-mono text-xs animate-pulse">CONNECTING TO CLOUD ENGINE...</p>
+    </div>
+
+    <div id="app" class="max-w-7xl mx-auto opacity-0 transition-opacity duration-500">
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
+            <div>
+                <h1 class="text-4xl font-extrabold bg-gradient-to-r from-blue-400 via-indigo-400 to-emerald-400 bg-clip-text text-transparent flex items-center gap-3">
+                    <i class="fas fa-chart-line text-emerald-400"></i> MatchAnalyst Pro
+                </h1>
+                <p class="text-slate-400 mt-2 flex items-center gap-2 text-sm">
+                    <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 pulse-emerald"></span>
+                    Firebase Cloud Sync Active
+                </p>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <div class="hidden md:block text-right">
+                    <div class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Global User ID</div>
+                    <div id="user-display" class="text-blue-400 text-[10px] font-mono">AUTHENTICATING...</div>
+                </div>
+                <div class="h-10 w-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
+                    <i class="fas fa-database text-blue-400 text-xs"></i>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Left Panel: Live Feed -->
+            <aside class="lg:col-span-3 space-y-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="text-sm font-bold text-slate-500 uppercase tracking-widest">Cloud Fixtures</h2>
+                    <span id="match-count" class="bg-blue-600/20 text-blue-400 text-[10px] px-2 py-0.5 rounded-full border border-blue-500/30">SYNCING</span>
+                </div>
+                
+                <div id="match-list" class="space-y-3">
+                    <!-- Matches rendered here via JS -->
+                </div>
+
+                <div class="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 mt-8">
+                    <h3 class="text-xs font-bold text-indigo-400 flex items-center gap-2 mb-2 uppercase">
+                        <i class="fas fa-info-circle"></i> Sync Status
+                    </h3>
+                    <p id="sync-status" class="text-[10px] text-slate-400 leading-relaxed font-mono">
+                        Awaiting data stream...
+                    </p>
+                </div>
+            </aside>
+
+            <!-- Center Panel: Deep Analysis -->
+            <main class="lg:col-span-6 space-y-6">
+                <!-- Main Scoreboard -->
+                <div id="active-scoreboard" class="glass-panel rounded-3xl p-8 relative overflow-hidden border-t-blue-500/50 min-h-[400px]">
+                    <div id="placeholder-msg" class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm italic">
+                        Select a match to start analysis
+                    </div>
+                    
+                    <div id="scoreboard-content" class="hidden">
+                        <div id="current-league" class="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
+                            LEAGUE
+                        </div>
+                        
+                        <div class="flex justify-between items-center mt-4">
+                            <div class="text-center w-1/3">
+                                <div class="w-20 h-20 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-slate-800 shadow-xl">
+                                    <i class="fas fa-shield-halved text-3xl text-blue-500"></i>
+                                </div>
+                                <h3 id="home-name" class="font-bold text-xl truncate">---</h3>
+                            </div>
+
+                            <div class="text-center">
+                                <div id="live-score" class="text-6xl font-black font-mono tracking-tighter mb-2">0 : 0</div>
+                                <div id="match-time" class="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-full text-xs font-bold">
+                                    <i class="fas fa-clock"></i> <span id="minute-val">--</span>
+                                </div>
+                            </div>
+
+                            <div class="text-center w-1/3">
+                                <div class="w-20 h-20 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-slate-800 shadow-xl">
+                                    <i class="fas fa-shield-halved text-3xl text-red-500"></i>
+                                </div>
+                                <h3 id="away-name" class="font-bold text-xl truncate">---</h3>
+                            </div>
+                        </div>
+
+                        <!-- Live Probability Bar -->
+                        <div class="mt-12 space-y-4">
+                            <div class="flex justify-between text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">
+                                <span>Home Win</span>
+                                <span>Draw</span>
+                                <span>Away Win</span>
+                            </div>
+                            <div class="h-5 w-full bg-slate-800/50 rounded-full flex overflow-hidden p-1 border border-slate-700/50">
+                                <div id="prob-home-bar" class="h-full bg-blue-500 rounded-l-full transition-all duration-1000" style="width: 33%"></div>
+                                <div id="prob-draw-bar" class="h-full bg-slate-500 transition-all duration-1000" style="width: 34%"></div>
+                                <div id="prob-away-bar" class="h-full bg-red-500 rounded-r-full transition-all duration-1000" style="width: 33%"></div>
+                            </div>
+                            <div class="flex justify-between font-mono text-xl font-black">
+                                <span id="prob-home-text" class="text-blue-400">--%</span>
+                                <span id="prob-draw-text" class="text-slate-400">--%</span>
+                                <span id="prob-away-text" class="text-red-400">--%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Secondary Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="glass-panel rounded-2xl p-6">
+                        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                            <i class="fas fa-chart-bar text-blue-400"></i> Live Metrics
+                        </h4>
+                        <div id="stat-container" class="space-y-6">
+                            <div class="text-slate-600 text-[10px] text-center italic">No data selected</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel rounded-2xl p-6 relative overflow-hidden">
+                        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                            <i class="fas fa-bolt text-yellow-400"></i> Analytics Engine
+                        </h4>
+                        <div class="space-y-4">
+                            <div class="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                                <div class="text-[10px] text-slate-500 font-bold uppercase mb-1">Expected Score</div>
+                                <div id="projected-score" class="text-2xl font-black text-emerald-400 font-mono tracking-widest">--</div>
+                            </div>
+                            <div class="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                                <p id="dynamic-insight" class="text-[11px] text-slate-300 italic text-center">
+                                    Awaiting live data metrics...
+                                </p>
+                            </div>
+                            <button id="simulate-btn" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors border border-slate-700">
+                                Create Mock Global Fixture
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Right Panel: Market Data -->
+            <aside class="lg:col-span-3 space-y-6">
+                <div class="glass-panel rounded-2xl p-5">
+                    <h2 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Cloud Markets</h2>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg border border-slate-800">
+                            <span class="text-xs font-semibold">Match Volatility</span>
+                            <span id="market-vol" class="text-emerald-400 font-mono text-sm">LOW</span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg border border-slate-800">
+                            <span class="text-xs font-semibold">AI Confidence</span>
+                            <span id="market-conf" class="text-emerald-400 font-mono text-sm">--%</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, onSnapshot, query, addDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Config from Environment
+        const firebaseConfig = {
+  apiKey: "AIzaSyCvaPpq5SnJlZTDPxeuy-rc6n0g-YcfxRk",
+  authDomain: "ussd254-c05af.firebaseapp.com",
+  projectId: "ussd254-c05af",
+  storageBucket: "ussd254-c05af.firebasestorage.app",
+  messagingSenderId: "807141930648",
+  appId: "1:807141930648:web:8861a029a71a2b7da502ed",
+  measurementId: "G-G3XT60YGC5"
+};
+
+        let currentUser = null;
+        let matches = [];
+        let selectedId = null;
+
+        const ui = {
+            matchList: document.getElementById('match-list'),
+            homeName: document.getElementById('home-name'),
+            awayName: document.getElementById('away-name'),
+            liveScore: document.getElementById('live-score'),
+            minute: document.getElementById('minute-val'),
+            league: document.getElementById('current-league'),
+            probHome: document.getElementById('prob-home-text'),
+            probDraw: document.getElementById('prob-draw-text'),
+            probAway: document.getElementById('prob-away-text'),
+            probHomeBar: document.getElementById('prob-home-bar'),
+            probDrawBar: document.getElementById('prob-draw-bar'),
+            probAwayBar: document.getElementById('prob-away-bar'),
+            statContainer: document.getElementById('stat-container'),
+            projScore: document.getElementById('projected-score'),
+            dynamicInsight: document.getElementById('dynamic-insight'),
+            simulateBtn: document.getElementById('simulate-btn'),
+            userDisplay: document.getElementById('user-display'),
+            loading: document.getElementById('loading-overlay'),
+            mainApp: document.getElementById('app'),
+            scoreContent: document.getElementById('scoreboard-content'),
+            placeholder: document.getElementById('placeholder-msg'),
+            syncText: document.getElementById('sync-status')
+        };
+
+        // Initialize Auth (Rule 3)
+        async function initAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.error("Auth error:", err);
+            }
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                ui.userDisplay.innerText = user.uid;
+                ui.loading.style.opacity = '0';
+                setTimeout(() => {
+                    ui.loading.classList.add('hidden');
+                    ui.mainApp.style.opacity = '1';
+                }, 500);
+                startListening();
+            }
+        });
+
+        // Listen to Firestore (Rule 1 & 2)
+        function startListening() {
+            // Public path for matches: /artifacts/{appId}/public/data/matches
+            const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'matches');
+            
+            onSnapshot(matchesRef, (snapshot) => {
+                matches = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                ui.syncText.innerText = `LAST SYNC: ${new Array(5).fill(0).map(() => Math.floor(Math.random()*16).toString(16)).join('')}`;
+                render();
+            }, (error) => {
+                ui.syncText.innerText = "SYNC ERROR: PERMISSION DENIED";
+            });
+        }
+
+        // Create a new match in Firestore
+        ui.simulateBtn.addEventListener('click', async () => {
+            if (!currentUser) return;
+            const teams = [
+                {h: "Man City", a: "Arsenal", l: "Premier League"},
+                {h: "PSG", a: "Marseille", l: "Ligue 1"},
+                {h: "Bayern", a: "Leipzig", l: "Bundesliga"}
+            ];
+            const pick = teams[Math.floor(Math.random() * teams.length)];
+            
+            const matchData = {
+                home: pick.h,
+                away: pick.a,
+                league: pick.l,
+                homeScore: 0,
+                awayScore: 0,
+                minute: Math.floor(Math.random() * 10),
+                stats: {
+                    homeXG: 0, awayXG: 0,
+                    homeShots: 0, awayShots: 0,
+                    homePoss: 50, awayPoss: 50,
+                    homeDanger: 0, awayDanger: 0
+                },
+                createdAt: Date.now()
+            };
+
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'matches'), matchData);
+        });
+
+        // Prediction Algorithm
+        function calculatePrediction(m) {
+            const timeLeft = 90 - m.minute;
+            let hPower = (m.homeScore * 2) + (m.stats.homeXG * 1.5) + (m.stats.homeDanger / 20);
+            let aPower = (m.awayScore * 2) + (m.stats.awayXG * 1.5) + (m.stats.awayDanger / 20);
+            hPower += 0.2; // Home edge
+            
+            const uncertainty = (timeLeft / 30);
+            const total = hPower + aPower + uncertainty;
+            const hProb = (hPower / total) * 100;
+            const aProb = (aPower / total) * 100;
+            const dProb = 100 - hProb - aProb;
+
+            return {
+                h: hProb.toFixed(1),
+                d: dProb.toFixed(1),
+                a: aProb.toFixed(1),
+                projHome: Math.round(m.homeScore + (m.stats.homeXG * (timeLeft/90))),
+                projAway: Math.round(m.awayScore + (m.stats.awayXG * (timeLeft/90)))
+            };
+        }
+
+        function render() {
+            document.getElementById('match-count').innerText = `${matches.length} MATCHES`;
+            
+            ui.matchList.innerHTML = matches.map(m => `
+                <div onclick="window.selectMatch('${m.id}')" class="p-4 rounded-xl border transition-all cursor-pointer ${m.id === selectedId ? 'bg-blue-600/10 border-blue-500 shadow-lg' : 'bg-slate-900/40 border-slate-800 hover:border-slate-700'}">
+                    <div class="flex justify-between items-center text-[10px] mb-2">
+                        <span class="text-slate-500 font-bold uppercase">${m.league}</span>
+                        <span class="text-emerald-400 font-mono">${m.minute}'</span>
+                    </div>
+                    <div class="flex justify-between items-center font-bold">
+                        <span class="text-sm">${m.home}</span>
+                        <span class="bg-slate-950 px-2 py-1 rounded font-mono border border-slate-800">${m.homeScore} - ${m.awayScore}</span>
+                        <span class="text-sm text-right">${m.away}</span>
+                    </div>
+                </div>
+            `).join('');
+
+            if (selectedId) {
+                const m = matches.find(x => x.id === selectedId);
+                if (!m) return;
+                
+                ui.placeholder.classList.add('hidden');
+                ui.scoreContent.classList.remove('hidden');
+
+                const pred = calculatePrediction(m);
+                ui.homeName.innerText = m.home;
+                ui.awayName.innerText = m.away;
+                ui.liveScore.innerText = `${m.homeScore} : ${m.awayScore}`;
+                ui.minute.innerText = `${m.minute}'`;
+                ui.league.innerText = m.league;
+
+                ui.probHome.innerText = `${pred.h}%`;
+                ui.probDraw.innerText = `${pred.d}%`;
+                ui.probAway.innerText = `${pred.a}%`;
+                ui.probHomeBar.style.width = `${pred.h}%`;
+                ui.probDrawBar.style.width = `${pred.d}%`;
+                ui.probAwayBar.style.width = `${pred.a}%`;
+
+                ui.projScore.innerText = `${pred.projHome} - ${pred.projAway}`;
+                document.getElementById('market-conf').innerText = `${Math.max(50, 100 - m.minute)}%`;
+
+                ui.statContainer.innerHTML = `
+                    ${renderStatRow('Possession', m.stats.homePoss, m.stats.awayPoss, '%')}
+                    ${renderStatRow('Expected Goals', m.stats.homeXG, m.stats.awayXG)}
+                    ${renderStatRow('Total Shots', m.stats.homeShots, m.stats.awayShots)}
+                    ${renderStatRow('Danger Attacks', m.stats.homeDanger, m.stats.awayDanger)}
+                `;
+            }
+        }
+
+        function renderStatRow(label, home, away, unit = '') {
+            const h = parseFloat(home);
+            const a = parseFloat(away);
+            const total = (h + a) || 1;
+            const hPerc = (h / total) * 100;
+            return `
+                <div class="space-y-1">
+                    <div class="flex justify-between text-[10px] font-bold px-1 uppercase text-slate-400">
+                        <span>${h}${unit}</span>
+                        <span class="text-slate-500 tracking-tighter">${label}</span>
+                        <span>${a}${unit}</span>
+                    </div>
+                    <div class="h-1 w-full bg-slate-800 rounded-full flex overflow-hidden">
+                        <div class="h-full bg-blue-500 transition-all duration-700" style="width: ${hPerc}%"></div>
+                        <div class="h-full bg-red-500 transition-all duration-700" style="width: ${100-hPerc}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        window.selectMatch = (id) => {
+            selectedId = id;
+            render();
+        };
+
+        // Simulated updates for active matches (writing back to Firestore)
+        // In a real app, this would happen in a background Cloud Function
+        setInterval(async () => {
+            if (!currentUser || matches.length === 0) return;
+            
+            // Just update the first 3 matches for demo performance
+            const updates = matches.slice(0, 3).filter(m => m.minute < 90);
+            for (const m of updates) {
+                const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', m.id);
+                const isHomeAction = Math.random() > 0.45;
+                const stats = { ...m.stats };
+                let hScore = m.homeScore;
+                let aScore = m.awayScore;
+
+                if (Math.random() > 0.6) {
+                    if (isHomeAction) {
+                        stats.homeXG = Number((stats.homeXG + 0.05).toFixed(2));
+                        stats.homeDanger += 1;
+                    } else {
+                        stats.awayXG = Number((stats.awayXG + 0.05).toFixed(2));
+                        stats.awayDanger += 1;
+                    }
+                }
+                
+                if (Math.random() > 0.98) {
+                    isHomeAction ? hScore++ : aScore++;
+                }
+
+                await updateDoc(matchRef, {
+                    minute: m.minute + 1,
+                    homeScore: hScore,
+                    awayScore: aScore,
+                    stats: stats
+                });
+            }
+        }, 8000);
+
+        initAuth();
+    </script>
+</body>
+</html>
